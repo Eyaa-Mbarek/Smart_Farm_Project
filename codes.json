@@ -1,0 +1,85 @@
+{
+  "structure": {
+    "lib": {
+      "core": {
+        "errors": {
+          "failures.dart": "// Define abstract class Failure to represent different types of failures\nabstract class Failure {\n  final String message;\n\n  Failure(this.message);\n}\n\n// Example concrete failures\nclass ServerFailure extends Failure {\n  ServerFailure(String message) : super(message);\n}\n\nclass CacheFailure extends Failure {\n  CacheFailure(String message) : super(message);\n}\n\n// Add more specific failure types as needed"
+        },
+        "usecases": {
+          "usecase.dart": "// Define an abstract class for Use Cases\nabstract class UseCase<Type, Params> {\n  Future<Type> call(Params params);\n}\n\n// Define a NoParams class if the use case doesn't need any parameters\nclass NoParams {\n  const NoParams();\n}"
+        }
+      },
+      "data": {
+        "datasources": {
+          "remote_data_source.dart": "// Define an abstract class for the remote data source\nabstract class RemoteDataSource {\n  Future<Map<String, dynamic>> getSensorData();\n}\n\n// Implement the Firebase Remote Data Source\nimport 'package:firebase_database/firebase_database.dart';\n\nclass FirebaseRemoteDataSource implements RemoteDataSource {\n  final FirebaseDatabase database = FirebaseDatabase.instance;\n\n  @override\n  Future<Map<String, dynamic>> getSensorData() async {\n    // Reference to the Firebase Realtime Database\n    DatabaseReference ref = database.ref(\"sensor_data\");\n\n    // Read the data at the 'sensor_data' location\n    DataSnapshot snapshot = await ref.get();\n\n    if (snapshot.exists) {\n      return Map<String, dynamic>.from(snapshot.value as Map);\n    } else {\n      throw Exception('No data available at sensor_data');\n    }\n  }\n}",
+          "local_data_source.dart": "// Abstract class for local data source, can be used for caching.\nabstract class LocalDataSource {\n  Future<void> cacheSensorData(Map<String, dynamic> data);\n  Future<Map<String, dynamic>?> getCachedSensorData();\n}\n\n//Implement caching data using shared preferences\n\nimport 'package:shared_preferences/shared_preferences.dart';\nimport 'dart:convert';\n\nclass SharedPreferencesLocalDataSource implements LocalDataSource {\n  final SharedPreferences sharedPreferences;\n\n  SharedPreferencesLocalDataSource({required this.sharedPreferences});\n\n  @override\n  Future<void> cacheSensorData(Map<String, dynamic> data) async {\n    await sharedPreferences.setString('sensor_data', json.encode(data));\n  }\n\n  @override\n  Future<Map<String, dynamic>?> getCachedSensorData() async {\n    final String? cachedData = sharedPreferences.getString('sensor_data');\n    if (cachedData != null) {\n      return Map<String, dynamic>.from(json.decode(cachedData));\n    } else {\n      return null;\n    }\n  }\n}"
+        },
+        "models": {
+          "sensor_model.dart": "// Define a model for the sensor data\nclass SensorModel {\n  final double temperature;\n  final double humidity;\n  final double double pressure;\n\n  SensorModel({\n    required this.temperature,\n    required this.humidity,\n    required this.pressure,\n  });\n\n  // Factory method to create a SensorModel from a JSON map\n  factory SensorModel.fromJson(Map<String, dynamic> json) {\n    return SensorModel(\n      temperature: (json['temperature'] as num).toDouble(),\n      humidity: (json['humidity'] as num).toDouble(),\n      pressure: (json['pressure'] as num).toDouble(),\n    );\n  }\n\n  // Method to convert SensorModel to a JSON map\n  Map<String, dynamic> toJson() {\n    return {\n      'temperature': temperature,\n      'humidity': humidity,\n      'pressure': pressure,\n    };\n  }\n}"
+        },
+        "repositories": {
+          "sensor_repository_impl.dart": "// Implementation of the Sensor Repository\nimport 'package:dartz/dartz.dart';\nimport '../../core/errors/failures.dart';\nimport '../../domain/entities/sensor.dart';\nimport '../../domain/repositories/sensor_repository.dart';\nimport '../datasources/remote_data_source.dart';\nimport '../models/sensor_model.dart';\nimport '../datasources/local_data_source.dart';\n\nclass SensorRepositoryImpl implements SensorRepository {\n  final RemoteDataSource remoteDataSource;\n  final LocalDataSource localDataSource;\n\n  SensorRepositoryImpl({required this.remoteDataSource, required this.localDataSource});\n\n  @override\n  Future<Either<Failure, Sensor>> getSensorData() async {\n    try {\n      // First, try to get data from the remote data source\n      final remoteData = await remoteDataSource.getSensorData();\n      final sensorModel = SensorModel.fromJson(remoteData);\n\n      // Cache the data locally\n      await localDataSource.cacheSensorData(sensorModel.toJson());\n\n      // Return the sensor data\n      return Right(sensorModel.toEntity());\n    } catch (e) {\n      // If remote data source fails, try to get data from the local data source\n      try {\n        final localData = await localDataSource.getCachedSensorData();\n        if (localData != null) {\n          final sensorModel = SensorModel.fromJson(localData);\n          return Right(sensorModel.toEntity());\n        } else {\n          return Left(CacheFailure('No data found in cache.'));\n        }\n      } catch (e) {\n        return Left(ServerFailure('Failed to fetch data from server and cache.'));\n      }\n    }\n  }\n}"
+        }
+      },
+      "domain": {
+        "entities": {
+          "sensor.dart": "// Define a sensor entity\nclass Sensor {\n  final double temperature;\n  final double humidity;\n  final double pressure;\n\n  Sensor({\n    required this.temperature,\n    required this.humidity,\n    required this.pressure,\n  });\n}"
+        },
+        "repositories": {
+          "sensor_repository.dart": "// Define an abstract repository for sensor data\nimport 'package:dartz/dartz.dart';\nimport '../entities/sensor.dart';\nimport '../../core/errors/failures.dart';\n\nabstract class SensorRepository {\n  Future<Either<Failure, Sensor>> getSensorData();\n}"
+        },
+        "usecases": {
+          "get_sensor_data.dart": "// Define a use case to get sensor data\nimport 'package:dartz/dartz.dart';\nimport '../../core/errors/failures.dart';\nimport '../../core/usecases/usecase.dart';\nimport '../entities/sensor.dart';\nimport '../repositories/sensor_repository.dart';\n\nclass GetSensorData implements UseCase<Sensor, NoParams> {\n  final SensorRepository repository;\n\n  GetSensorData(this.repository);\n\n  @override\n  Future<Either<Failure, Sensor>> call(NoParams params) async {\n    return await repository.getSensorData();\n  }\n}"
+        }
+      },
+      "presentation": {
+        "bloc": {
+          "sensor_bloc.dart": "// Define the BLoC for sensor data\nimport 'package:flutter_bloc/flutter_bloc.dart';\nimport 'package:equatable/equatable.dart';\nimport 'package:dartz/dartz.dart';\n\nimport '../../domain/entities/sensor.dart';\nimport '../../domain/usecases/get_sensor_data.dart';\nimport '../../core/errors/failures.dart';\nimport '../../core/usecases/usecase.dart';\n\n// Define Events\nabstract class SensorEvent extends Equatable {\n  @override\n  List<Object> get props => [];\n}\n\nclass GetSensorDataEvent extends SensorEvent {}\n\n// Define States\nabstract class SensorState extends Equatable {\n  @override\n  List<Object> get props => [];\n}\n\nclass SensorInitial extends SensorState {}\n\nclass SensorLoading extends SensorState {}\n\nclass SensorLoaded extends SensorState {\n  final Sensor sensor;\n\n  SensorLoaded(this.sensor);\n\n  @override\n  List<Object> get props => [sensor];\n}\n\nclass SensorError extends SensorState {\n  final String message;\n\n  SensorError(this.message);\n\n  @override\n  List<Object> get props => [message];\n}\n\n// Define the BLoC\nclass SensorBloc extends Bloc<SensorEvent, SensorState> {\n  final GetSensorData getSensorData;\n\n  SensorBloc({required this.getSensorData}) : super(SensorInitial()) {\n    on<GetSensorDataEvent>((event, emit) async {\n      emit(SensorLoading());\n      final failureOrSensor = await getSensorData(NoParams());\n      emit(_eitherLoadedOrErrorState(failureOrSensor));\n    });\n  }\n\n  SensorState _eitherLoadedOrErrorState(Either<Failure, Sensor> failureOrSensor) {\n    return failureOrSensor.fold(\n      (failure) => SensorError(_mapFailureToMessage(failure)),\n      (sensor) => SensorLoaded(sensor),\n    );\n  }\n\n  String _mapFailureToMessage(Failure failure) {\n    if (failure is ServerFailure) {\n      return failure.message; // Or a generic server error message\n    } else if (failure is CacheFailure) {\n      return 'Cache Failure: ' + failure.message; //Or a generic cache error message\n    } else {\n      return 'Unexpected error';\n    }\n  }\n}"
+        },
+        "pages": {
+          "sensor_page.dart": "import 'package:flutter/material.dart';\nimport 'package:flutter_bloc/flutter_bloc.dart';\n\nimport '../bloc/sensor_bloc.dart';\n\nclass SensorPage extends StatelessWidget {\n  @override\n  Widget build(BuildContext context) {\n    return Scaffold(\n      appBar: AppBar(title: const Text('Sensor Data')),\n      body: BlocBuilder<SensorBloc, SensorState>(\n        builder: (context, state) {\n          if (state is SensorInitial) {\n            return const Center(child: Text('Press the button to load data.'));\n          }\n          if (state is SensorLoading) {\n            return const Center(child: CircularProgressIndicator());\n          }\n          if (state is SensorLoaded) {\n            return Padding(\n              padding: const EdgeInsets.all(16.0),\n              child: Column(\n                crossAxisAlignment: CrossAxisAlignment.start,\n                children: [\n                  Text('Temperature: ${state.sensor.temperature} °C'),\n                  Text('Humidity: ${state.sensor.humidity} %'),\n                  Text('Pressure: ${state.sensor.pressure} hPa'),\n                ],\n              ),\n            );\n          }\n          if (state is SensorError) {\n            return Center(child: Text('Error: ${state.message}'));\n          }\n          return const Center(child: Text('Unknown state.'));\n        },\n      ),\n      floatingActionButton: FloatingActionButton(\n        onPressed: () => BlocProvider.of<SensorBloc>(context).add(GetSensorDataEvent()),\n        child: const Icon(Icons.refresh),\n      ),\n    );\n  }\n}"
+        }
+      },
+      "injection_container.dart": "// Dependency Injection using get_it\nimport 'package:get_it/get_it.dart';\nimport 'package:shared_preferences/shared_preferences.dart';\n\nimport 'core/network/network_info.dart';\nimport 'data/datasources/remote_data_source.dart';\nimport 'data/datasources/local_data_source.dart';\nimport 'data/repositories/sensor_repository_impl.dart';\nimport 'domain/repositories/sensor_repository.dart';\nimport 'domain/usecases/get_sensor_data.dart';\nimport 'presentation/bloc/sensor_bloc.dart';\nimport 'package:internet_connection_checker/internet_connection_checker.dart';\n\nfinal sl = GetIt.instance;\n\nFuture<void> init() async {\n  //! Features - Sensor\n  // Bloc\n  sl.registerFactory(\n    () => SensorBloc(getSensorData: sl()),\n  );\n\n  // Use cases\n  sl.registerLazySingleton(() => GetSensorData(sl()));\n\n  // Repository\n  sl.registerLazySingleton<SensorRepository>(\n    () => SensorRepositoryImpl(remoteDataSource: sl(), localDataSource: sl()),\n  );\n\n  // Data sources\n  sl.registerLazySingleton<RemoteDataSource>(\n    () => FirebaseRemoteDataSource(),\n  );\n\n  sl.registerLazySingleton<LocalDataSource>(\n    () => SharedPreferencesLocalDataSource(sharedPreferences: sl()),\n  );\n\n  //! Core\n  sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(sl()));\n\n  //! External\n  final sharedPreferences = await SharedPreferences.getInstance();\n  sl.registerLazySingleton(() => sharedPreferences);\n  sl.registerLazySingleton(() => InternetConnectionChecker());\n}\n\nclass NetworkInfoImpl implements NetworkInfo {\n  final InternetConnectionChecker connectionChecker;\n\n  NetworkInfoImpl(this.connectionChecker);\n\n  @override\n  Future<bool> get isConnected => connectionChecker.hasConnection;\n}"
+    },
+    "main.dart": "import 'package:flutter/material.dart';\nimport 'package:flutter_bloc/flutter_bloc.dart';\nimport 'injection_container.dart' as di;\nimport 'presentation/bloc/sensor_bloc.dart';\nimport 'presentation/pages/sensor_page.dart';\nimport 'package:firebase_core/firebase_core.dart';\nimport 'firebase_options.dart';\n\nvoid main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  await Firebase.initializeApp(\n    options: DefaultFirebaseOptions.currentPlatform,\n  );\n  await di.init();\n  runApp(const MyApp());\n}\n\nclass MyApp extends StatelessWidget {\n  const MyApp({Key? key}) : super(key: key);\n\n  @override\n  Widget build(BuildContext context) {\n    return MaterialApp(\n      title: 'Flutter Sensor App',\n      theme: ThemeData(\n        primarySwatch: Colors.blue,\n      ),\n      home: BlocProvider(\n        create: (_) => di.sl<SensorBloc>(),\n        child: SensorPage(),\n      ),\n    );\n  }\n}"
+  },
+  "dependencies": [
+    "firebase_core",
+    "firebase_database",
+    "flutter_bloc",
+    "equatable",
+    "dartz",
+    "get_it",
+    "shared_preferences",
+    "internet_connection_checker"
+  ],
+  "setup_instructions": [
+    "1.  Create a new Flutter project.",
+    "2.  Add the dependencies listed above to your `pubspec.yaml` file.",
+    "3.  Create the file structure as described in the `structure` field.",
+    "4.  Replace the contents of each file with the corresponding code from the `structure` field.",
+    "5.  Enable the Firebase Realtime Database in your Firebase project.",
+    "6.  Configure your Firebase project for your Flutter app.  Follow the instructions on the Firebase website to add your app to your Firebase project and download the `google-services.json` (for Android) or `GoogleService-Info.plist` (for iOS) file.  Place this file in the appropriate location in your Flutter project.",
+    "7.  Add the following line to the `dependencies` section of your `pubspec.yaml` file:",
+    "   `firebase_core: ^2.24.2`",
+    "   `firebase_database: ^10.3.7`",
+    "   `flutter_bloc: ^8.1.3`",
+    "   `equatable: ^2.0.5`",
+    "   `dartz: ^0.10.1`",
+    "   `get_it: ^7.6.7`",
+    "   `shared_preferences: ^2.2.2`",
+    "   `internet_connection_checker: ^1.0.0+1`",
+    "8.  Run `flutter pub get` to install the dependencies.",
+    "9.  Replace `DefaultFirebaseOptions.currentPlatform` in `main.dart` with your Firebase project configuration.",
+    "10. Create a 'sensor_data' node in your Firebase Realtime Database and add 'temperature', 'humidity', and 'pressure' fields with numeric values.",
+    "11. Run the app."
+  ],
+  "notes": [
+    "This code provides a basic UI for displaying temperature, humidity, and pressure values fetched from Firebase Realtime Database using the Clean Architecture principles.",
+    "Make sure to replace `//Reference to the Firebase Realtime Database` with the correct path to your data in the Firebase Realtime Database.",
+    "Error handling and UI improvements are left as an exercise for the user.",
+    "Consider adding a loading indicator while fetching data from Firebase.",
+    "Remember to initialize Firebase in your `main.dart` file."
+  ]
+}
