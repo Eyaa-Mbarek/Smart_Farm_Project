@@ -3,11 +3,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:smart_farm_test/injection_container.dart';
 import 'package:smart_farm_test/data/datasources/remote_data_source.dart';
-import 'package:intl/intl.dart'; // Import intl for date formatting
-
+import 'package:intl/intl.dart';
 
 class DataHistoryPage extends StatefulWidget {
-  const DataHistoryPage({super.key});
+  const DataHistoryPage({Key? key}) : super(key: key);
 
   @override
   State<DataHistoryPage> createState() => _DataHistoryPageState();
@@ -16,13 +15,12 @@ class DataHistoryPage extends StatefulWidget {
 class _DataHistoryPageState extends State<DataHistoryPage> {
   String _selectedSensorType = 'temperature';
   String _selectedPeriod = 'today';
-  bool _isLoading = false; // Track loading state
-  Map<String, dynamic>? _chartData; // Add the _chartData variable
+  bool _isLoading = false;
+  Map<String, dynamic>? _chartData;
 
   @override
   void initState() {
     super.initState();
-    // Load initial data
     _loadSensorData();
   }
 
@@ -37,8 +35,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Dropdowns for Sensor Type and Period
-                Card(  // Card around the Dropdown
+                Card(
                   elevation: 4.0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
                   child: Padding(
@@ -50,7 +47,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                           child: DropdownButtonFormField<String>(
                             decoration: const InputDecoration(
                               labelText: 'Sensor Type',
-                              border: InputBorder.none,  //Remove the border
+                              border: InputBorder.none,
                             ),
                             value: _selectedSensorType,
                             items: ['temperature', 'humidity', 'pressure']
@@ -62,7 +59,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                             onChanged: (value) {
                               setState(() {
                                 _selectedSensorType = value!;
-                                _loadSensorData(); // Reload data when sensor type changes
+                                _loadSensorData();
                               });
                             },
                           ),
@@ -72,7 +69,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                           child: DropdownButtonFormField<String>(
                             decoration: const InputDecoration(
                               labelText: 'Period',
-                              border: InputBorder.none,  //Remove the border
+                              border: InputBorder.none,
                             ),
                             value: _selectedPeriod,
                             items: ['today', 'last week', 'last month']
@@ -84,7 +81,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                             onChanged: (value) {
                               setState(() {
                                 _selectedPeriod = value!;
-                                _loadSensorData(); // Reload data when period changes
+                                _loadSensorData();
                               });
                             },
                           ),
@@ -94,9 +91,8 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // The Graph
                 Expanded(
-                  child: Card(  //Card Around the Chart
+                  child: Card(
                     elevation: 4.0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
                     child: Padding(
@@ -107,6 +103,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
                               sensorType: _selectedSensorType,
                               period: _selectedPeriod,
                               chartData: _chartData,
+                              selectedPeriod: _selectedPeriod,
                             ),
                     ),
                   ),
@@ -114,7 +111,6 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
               ],
             ),
           ),
-          // Loading Indicator Overlay
           if (_isLoading)
             Container(
               color: Colors.black.withOpacity(0.5),
@@ -130,7 +126,7 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
   Future<void> _loadSensorData() async {
     setState(() {
       _isLoading = true;
-      _chartData = null; // Reset chart data while loading
+      _chartData = null;
     });
     try {
       final now = DateTime.now();
@@ -163,28 +159,28 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
       });
     }
   }
+
   Future<Map<String, dynamic>> _aggregateData(Map<String, dynamic> rawData, String period) async {
     Map<String, dynamic> aggregatedData = {};
 
-    // Determine the interval based on the selected period
     Duration interval;
     switch (period) {
       case 'today':
-        interval = const Duration(minutes: 30);  // 30-minute intervals
+        interval = const Duration(minutes: 30);
         break;
       case 'last week':
-        interval = const Duration(hours: 6);   // 6-hour intervals
+        interval = const Duration(hours: 6);
         break;
       case 'last month':
-        interval = const Duration(days: 1);     // 1-day intervals
+        interval = const Duration(days: 1);
         break;
       default:
-        interval = const Duration(minutes: 30);  // Default to 30-minute intervals
+        interval = const Duration(minutes: 30);
         break;
     }
 
     List<MapEntry<String, dynamic>> entries = rawData.entries.toList();
-    entries.sort((a, b) => a.key.compareTo(b.key)); // Sort by timestamp
+    entries.sort((a, b) => a.key.compareTo(b.key));
 
     DateTime currentIntervalStart = entries.isNotEmpty
         ? DateTime.fromMillisecondsSinceEpoch(int.parse(entries.first.key))
@@ -196,20 +192,16 @@ class _DataHistoryPageState extends State<DataHistoryPage> {
       double value = (entry.value as num).toDouble();
 
       if (timestamp.isBefore(currentIntervalStart.add(interval))) {
-        // Still within the current interval
         valuesInInterval.add(value);
       } else {
-        // Move to the next interval
         if (valuesInInterval.isNotEmpty) {
-          // Average the values in the previous interval
           double averageValue = valuesInInterval.reduce((a, b) => a + b) / valuesInInterval.length;
           int averageTimestamp = currentIntervalStart.millisecondsSinceEpoch;
           aggregatedData[averageTimestamp.toString()] = averageValue;
         }
 
-        // Start a new interval
         currentIntervalStart = timestamp;
-        valuesInInterval = [value];  // Add the current value to the new interval
+        valuesInInterval = [value];
       }
     }
     if (valuesInInterval.isNotEmpty) {
@@ -226,13 +218,15 @@ class SensorHistoryChart extends StatelessWidget {
   final String sensorType;
   final String period;
   final Map<String, dynamic>? chartData;
+   final String selectedPeriod;
 
   const SensorHistoryChart({
-    super.key,
+    Key? key,
     required this.sensorType,
     required this.period,
     required this.chartData,
-  });
+     required this.selectedPeriod,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -241,83 +235,83 @@ class SensorHistoryChart extends StatelessWidget {
     } else if (chartData!.isEmpty) {
       return const Center(child: Text('No data available for the selected period.'));
     } else {
-      // Process the data to build the chart
-      final List<FlSpot> data = chartData!.entries.map((entry) {
-        final timestamp = int.parse(entry.key);
+      final List<BarChartGroupData> barGroups = [];
+
+      final List<MapEntry<String, dynamic>> sortedEntries = chartData!.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+
+      for (int i = 0; i < sortedEntries.length; i++) {
+        final entry = sortedEntries[i];
         final value = (entry.value as num).toDouble();
-        return FlSpot(timestamp.toDouble(), value);
-      }).toList();
+        barGroups.add(
+          BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: value,
+                color: Colors.green,
+                width: 8,
+              ),
+            ],
+          ),
+        );
+      }
 
-      // Find min and max Y values for chart scaling
-      double minY = data.map((spot) => spot.y).reduce((a, b) => a < b ? a : b);
-      double maxY = data.map((spot) => spot.y).reduce((a, b) => a > b ? a : b);
-
-      // Adjust min/max Y to provide some padding in the chart
-      double range = maxY - minY;
-      minY -= range * 0.1;
-      maxY += range * 0.1;
-
-      return LineChart(
-        LineChartData(
-          minX: data.first.x,
-          maxX: data.last.x,
-          minY: minY,
-          maxY: maxY,
-          lineBarsData: [
-            LineChartBarData(
-              spots: data,
-              isCurved: true,
-              color: Colors.blue,  // Set line color
-              barWidth: 3,   // Set line width
-              isStrokeCapRound: true,
-              dotData: FlDotData(show: true), // Show data point dots
-              belowBarData: BarAreaData(show: false),
-            ),
-          ],
+      return BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: _getMaxY(chartData!),
           titlesData: FlTitlesData(
             show: true,
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                getTitlesWidget: bottomTitleWidgets,
+                getTitlesWidget: (double value, TitleMeta meta) {
+                  if (value < 0 || value >= sortedEntries.length) {
+                    return const Text(''); // Hide titles outside the range
+                  }
+                  final timestamp = int.parse(sortedEntries[value.toInt()].key);
+                  DateTime date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+                  final now = DateTime.now();
+
+                  if ( selectedPeriod != 'last month'||selectedPeriod == 'last month' && (date.day % 5 == 0 ||
+                      (date.year == now.year && date.month == now.month && date.day == now.day))) {
+                     return Text(DateFormat('d').format(date),
+                      style: const TextStyle(fontSize: 10));
+                  } else {
+                    return const Text(''); // Hide other dates
+                  }
+                },
                 reservedSize: 30,
               ),
             ),
             leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-              ),
+              sideTitles: SideTitles(showTitles: true,reservedSize: 28,maxIncluded: false),
             ),
-            topTitles: AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
-          gridData: FlGridData(show: true,  //Show Grid
-            getDrawingHorizontalLine: (value) {
-              return FlLine(
-                color: Colors.grey, //Horizontal Line Color
-                strokeWidth: 1,
-              );
-            },
-            getDrawingVerticalLine: (value) {
-              return FlLine(
-                color: Colors.grey, //Vertical Line Color
-                strokeWidth: 1,
-              );
-            },),
+          gridData: FlGridData(show: true),
           borderData: FlBorderData(
             show: true,
             border: Border.all(color: const Color(0xff37434d), width: 1),
           ),
+          barGroups: barGroups,
         ),
       );
     }
   }
 
+  double _getMaxY(Map<String, dynamic> chartData) {
+    double maxY = 0;
+    for (var entry in chartData.entries) {
+      final value = (entry.value as num).toDouble();
+      if (value > maxY) {
+        maxY = value;
+      }
+    }
+    return maxY * 1.2; // Add some padding
+  }
   // Helper function to build the bottom titles (dates)
   Widget bottomTitleWidgets(double value, TitleMeta meta) {
     DateTime date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
