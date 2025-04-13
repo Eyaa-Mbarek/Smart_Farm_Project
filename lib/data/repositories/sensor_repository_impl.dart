@@ -1,45 +1,31 @@
-// data/repositories/sensor_repository_impl.dart
-import 'package:dartz/dartz.dart';
-import '../../core/errors/failures.dart';
-import '../../domain/entities/sensor.dart';
-import '../../domain/repositories/sensor_repository.dart';
-import '../datasources/remote_data_source.dart';
-import '../models/sensor_model.dart';
-import '../datasources/local_data_source.dart';
+import 'package:smart_farm_test/data/datasources/firebase_datasource.dart';
+import 'package:smart_farm_test/domain/entities/sensor_block.dart';
+import 'package:smart_farm_test/domain/entities/sensor_type.dart';
+import 'package:smart_farm_test/domain/repositories/sensor_repository.dart';
 
-class SensorRepositoryImpl implements SensorRepository {
-  final RemoteDataSource remoteDataSource;
-  final LocalDataSource localDataSource;
-
-  SensorRepositoryImpl({required this.remoteDataSource, required this.localDataSource});
+class FirebaseSensorRepositoryImpl implements ISensorRepository {
+  final FirebaseDataSource dataSource;
+  FirebaseSensorRepositoryImpl(this.dataSource);
 
   @override
-  Future<Either<Failure, Sensor>> getSensorData() async {
-    try {
-      // First, try to get data from the remote data source
-      final remoteData = await remoteDataSource.getSensorData();
-      final sensorModel = SensorModel.fromJson(remoteData);
+  Stream<List<SensorBlock>> watchSensorBlocks(String deviceId) {
+    return dataSource.watchSensorBlocks(deviceId);
+  }
 
-      // Cache the data locally
-      await localDataSource.cacheSensorData(sensorModel.toJson());
+  @override
+  Future<void> updateSensorBlockConfig(String deviceId, String blockId, {
+      String? name, SensorType? type, double? threshold, bool? enabled}) async {
 
-      // Return the sensor data
-      return Right(sensorModel.toEntity());
-    } catch (remoteError) { // Capture the remote error for debugging
-      print('Error fetching from remote data source: $remoteError'); // Print the remote error
-      // If remote data source fails, try to get data from the local data source
-      try {
-        final localData = await localDataSource.getCachedSensorData();
-        if (localData != null) {
-          final sensorModel = SensorModel.fromJson(localData);
-          return Right(sensorModel.toEntity());
-        } else {
-          return Left(CacheFailure('No data found in cache.'));
-        }
-      } catch (cacheError) { // Capture the cache error for debugging
-        print('Error fetching from local data source: $cacheError'); // Print the cache error
-        return Left(ServerFailure('Failed to fetch data from server and cache.'));
+      final updates = <String, dynamic>{};
+      if (name != null) updates['name'] = name;
+      if (type != null) {
+          updates['type'] = sensorTypeToInt(type);
+          // Always update unit when type changes
+          updates['unit'] = sensorTypeToUnit(type);
       }
-    }
+      if (threshold != null) updates['threshold'] = threshold;
+      if (enabled != null) updates['enabled'] = enabled;
+
+      await dataSource.updateSensorBlockConfig(deviceId, blockId, updates);
   }
 }

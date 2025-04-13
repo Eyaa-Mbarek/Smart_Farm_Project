@@ -1,8 +1,13 @@
-// Define an abstract repository for sensor data
-import 'package:dartz/dartz.dart';
-import '../entities/sensor.dart';
-import '../../core/errors/failures.dart';
+import 'package:smart_farm_test/domain/entities/sensor_block.dart';
+import 'package:smart_farm_test/domain/entities/sensor_type.dart';
 
-abstract class SensorRepository {
-  Future<Either<Failure, Sensor>> getSensorData();
+abstract class ISensorRepository {
+  Stream<List<SensorBlock>> watchSensorBlocks(String deviceId);
+
+  Future<void> updateSensorBlockConfig(String deviceId, String blockId, {
+    String? name,
+    SensorType? type,
+    double? threshold,
+    bool? enabled,
+  });
 }
