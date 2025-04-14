@@ -7,25 +7,29 @@ class FirebaseSensorRepositoryImpl implements ISensorRepository {
   final FirebaseDataSource dataSource;
   FirebaseSensorRepositoryImpl(this.dataSource);
 
+  // Renamed to match interface
   @override
-  Stream<List<SensorBlock>> watchSensorBlocks(String deviceId) {
-    return dataSource.watchSensorBlocks(deviceId);
+  Stream<List<SensorBlock>> watchAllSensorBlocks(String deviceId) {
+    return dataSource.watchAllSensorBlocks(deviceId);
   }
 
   @override
   Future<void> updateSensorBlockConfig(String deviceId, String blockId, {
-      String? name, SensorType? type, double? threshold, bool? enabled}) async {
+      String? name, SensorType? type, double? threshold, String? unit, bool? enabled}) async {
+        // (Keep existing update logic)
+         final updates = <String, dynamic>{};
+         if (name != null) updates['name'] = name;
+         if (type != null) {
+             updates['type'] = sensorTypeToInt(type);
+             updates['unit'] = unit ?? sensorTypeToUnit(type);
+         } else if (unit != null) {
+             updates['unit'] = unit;
+         }
+         if (threshold != null) updates['threshold'] = threshold;
+         if (enabled != null) updates['enabled'] = enabled;
 
-      final updates = <String, dynamic>{};
-      if (name != null) updates['name'] = name;
-      if (type != null) {
-          updates['type'] = sensorTypeToInt(type);
-          // Always update unit when type changes
-          updates['unit'] = sensorTypeToUnit(type);
-      }
-      if (threshold != null) updates['threshold'] = threshold;
-      if (enabled != null) updates['enabled'] = enabled;
-
-      await dataSource.updateSensorBlockConfig(deviceId, blockId, updates);
+         await dataSource.updateSensorBlockConfig(deviceId, blockId, updates);
   }
+
+   // --- ADD and DELETE methods are REMOVED ---
 }
