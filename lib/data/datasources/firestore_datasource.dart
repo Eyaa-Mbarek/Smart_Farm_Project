@@ -46,12 +46,24 @@ class FirestoreDataSource {
 
   // --- Notification History Methods ---
 
-  Future<void> addNotification(String uid, Map<String, dynamic> notificationData) {
-     // Add server timestamp when creating
-     notificationData['timestamp'] = FieldValue.serverTimestamp();
-     notificationData['read'] = false; // Default to unread
-     return _firestore.collection('users').doc(uid).collection('notifications').add(notificationData);
-  }
+   Future<void> addNotification(String uid, Map<String, dynamic> notificationData) async {
+         // Create a new map locally to ensure we control all fields being added
+         final Map<String, dynamic> dataToSave = Map.from(notificationData); // Copy incoming data
+
+         // Add the special fields DIRECTLY to the map being saved
+         dataToSave['timestamp'] = FieldValue.serverTimestamp();
+         dataToSave['read'] = false; // Default to unread
+
+         print("FirestoreDataSource: Adding notification data: $dataToSave for UID: $uid");
+         try {
+             // Add the locally constructed map
+             await _firestore.collection('users').doc(uid).collection('notifications').add(dataToSave);
+             print("FirestoreDataSource: Notification added successfully.");
+         } catch (e) {
+            print("FirestoreDataSource: Error adding notification document: $e");
+            rethrow;
+         }
+      }
 
   // Stream of notifications ordered by timestamp descending
   Stream<List<NotificationItem>> watchNotifications(String uid) {

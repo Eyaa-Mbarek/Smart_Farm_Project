@@ -11,15 +11,24 @@ class NotificationRepositoryImpl implements INotificationRepository {
     return _dataSource.watchNotifications(uid);
   }
 
-   @override
-  Future<void> addNotification(String uid, {required String title, required String body, String? blocId}) {
-     final data = {
-        'title': title,
-        'body': body,
-        if (blocId != null) 'blocId': blocId,
-        // timestamp and read status are handled by datasource
-     };
-     return _dataSource.addNotification(uid, data);
+  @override
+  Future<void> addNotification(
+    String uid, {
+    required String title,
+    required String body,
+    String? blocId,
+  }) {
+    // THIS is the map being passed to the datasource
+    final data = {
+      'title': title, // String - OK
+      'body': body, // String - OK
+      if (blocId != null) 'blocId': blocId, // String? - OK
+      // We are NOT adding timestamp or read here, datasource does it.
+      // IS THERE ANY OTHER FIELD ACCIDENTALLY ADDED HERE?
+    };
+    // Check what's actually in 'data' right before passing
+    print("NotificationRepositoryImpl: Passing data to datasource: $data");
+    return _dataSource.addNotification(uid, data); // Passing the 'data' map
   }
 
   @override

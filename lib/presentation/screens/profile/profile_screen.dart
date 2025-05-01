@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
+import 'package:smart_farm_test/domain/repositories/auth_repository.dart';
 import 'package:smart_farm_test/presentation/providers/auth_providers.dart';
 import 'package:smart_farm_test/presentation/providers/user_providers.dart';
 import 'package:smart_farm_test/presentation/providers/notification_providers.dart';
@@ -39,6 +40,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
      }
   }
 
+   void _showLogoutConfirmationDialog(BuildContext context, IAuthRepository authRepository) { // Accept repo
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) { // Use a different context name
+        return AlertDialog(
+          title: const Text('Confirm Logout'),
+          content: const Text('Are you sure you want to log out?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Close the dialog
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red), // Style the logout button
+              child: const Text('Logout'),
+              onPressed: () async {
+                Navigator.of(dialogContext).pop(); // Close the dialog FIRST
+                try {
+                  await authRepository.signOut();
+                  // No navigation needed here, the Wrapper will handle the auth state change
+                  print("User logged out successfully.");
+                } catch (e) {
+                   print("Error during logout: $e");
+                   // Show error SnackBar if needed (using the original screen context)
+                   ScaffoldMessenger.of(context).showSnackBar(
+                       SnackBar(content: Text('Logout failed: $e'), backgroundColor: Colors.red),
+                   );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +92,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
             onPressed: () async {
-               await authRepository.signOut();
+            // Show confirmation dialog BEFORE logging out
+              _showLogoutConfirmationDialog(context, authRepository); // Pass context and repo
                // Wrapper will handle navigation
             },
           )
