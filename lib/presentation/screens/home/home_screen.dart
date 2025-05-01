@@ -110,7 +110,7 @@ class HomeScreen extends ConsumerWidget {
                  if (availableToAdd.isEmpty) {
                     return AlertDialog(
                        title: const Text('Add Block'),
-                       content: const Text('All available blocks from Firebase are already being monitored.'),
+                       content: const Text('All available blocks are already being monitored.'),
                        actions: [ TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('OK')) ],
                     );
                  }

@@ -1,56 +1,82 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_farm_test/domain/entities/user_profile.dart';
+import 'package:smart_farm_test/presentation/providers/auth_providers.dart'; // Need auth state
+import 'package:smart_farm_test/presentation/providers/user_providers.dart'; // Need user repo
 
-const String _prefsKey = 'monitoredBlockIds';
-
-// Notifier to manage the Set of monitored block IDs
+// Notifier now interacts with Firestore via UserRepository
 class MonitoredBlockIdsNotifier extends StateNotifier<Set<String>> {
-   // Initialize with an empty set, load initial values asynchronously
-  MonitoredBlockIdsNotifier() : super({});
+  final Ref ref; // Keep ref to read other providers
 
-  // Load IDs from SharedPreferences
-  Future<void> loadMonitoredBlocks() async {
-     final prefs = await SharedPreferences.getInstance();
-     final List<String>? monitoredIds = prefs.getStringList(_prefsKey);
-     if (monitoredIds != null) {
-        state = monitoredIds.toSet();
-         print("Loaded monitored blocks: $state");
-     } else {
-        // Default: Monitor 'bloc1' and 'bloc2' if nothing is saved yet
-        state = {'bloc1', 'bloc2'};
-         print("No saved blocks, defaulting to: $state");
-         await _saveToPrefs(); // Save the default
-     }
-  }
+  // Initialize with empty set, load based on user profile stream
+  MonitoredBlockIdsNotifier(this.ref) : super({});
 
-  // Add a block ID to the monitored set and save
+  // No separate load function needed, we react to user profile changes
+
+  // Add a block ID and update Firestore
   Future<void> addMonitoredBlock(String blockId) async {
-     if (!state.contains(blockId)) {
-        state = {...state, blockId}; // Create new set with added ID
-        await _saveToPrefs();
-         print("Added $blockId to monitored blocks: $state");
-     }
+    final user = ref.read(authStateProvider).value;
+    if (user == null) return; // Not logged in
+
+    if (!state.contains(blockId)) {
+      final updatedSet = {...state, blockId};
+      state = updatedSet; // Update local state immediately for responsiveness
+      try {
+         await ref.read(userRepositoryProvider).updateMonitoredBlocks(user.uid, updatedSet.toList());
+         print("Updated monitored blocks in Firestore: $state");
+      } catch (e) {
+         print("Error updating monitored blocks in Firestore: $e");
+         // Optionally revert local state on error
+         state = state.where((id) => id != blockId).toSet();
+         rethrow; // Allow UI to show error
+      }
+    }
   }
 
-  // Remove a block ID from the monitored set and save
+  // Remove a block ID and update Firestore
   Future<void> removeMonitoredBlock(String blockId) async {
+     final user = ref.read(authStateProvider).value;
+     if (user == null) return;
+
      if (state.contains(blockId)) {
-        state = state.where((id) => id != blockId).toSet(); // Create new set without the ID
-        await _saveToPrefs();
-         print("Removed $blockId from monitored blocks: $state");
+        final updatedSet = state.where((id) => id != blockId).toSet();
+        state = updatedSet; // Update local state immediately
+        try {
+           await ref.read(userRepositoryProvider).updateMonitoredBlocks(user.uid, updatedSet.toList());
+           print("Updated monitored blocks in Firestore: $state");
+        } catch (e) {
+           print("Error updating monitored blocks in Firestore: $e");
+           // Optionally revert local state on error
+           state = {...state, blockId};
+           rethrow;
+        }
      }
   }
 
-  // Helper to save the current state to SharedPreferences
-  Future<void> _saveToPrefs() async {
-     final prefs = await SharedPreferences.getInstance();
-     await prefs.setStringList(_prefsKey, state.toList());
+  // Function to sync local state with Firestore state (called by provider)
+  void syncWithFirestore(List<String> firestoreList) {
+     final firestoreSet = firestoreList.toSet();
+     if (state != firestoreSet) { // Only update if different
+         print("Syncing local monitored blocks with Firestore: $firestoreSet");
+         state = firestoreSet;
+     }
   }
 }
 
+
 // Provider for the MonitoredBlockIdsNotifier
 final monitoredBlockIdsProvider = StateNotifierProvider<MonitoredBlockIdsNotifier, Set<String>>((ref) {
-   // Instantiated in main.dart override to allow pre-loading
-   throw UnimplementedError('monitoredBlockIdsProvider must be overridden in main ProviderScope');
-   // return MonitoredBlockIdsNotifier()..loadMonitoredBlocks(); // Standard instantiation if no preload needed
+    final notifier = MonitoredBlockIdsNotifier(ref);
+
+    // Listen to the user profile provider
+    ref.listen<UserProfile?>(userProfileProvider.select((asyncValue) => asyncValue.valueOrNull), (previousProfile, currentProfile) {
+         if (currentProfile != null) {
+             // When the user profile loads or changes, sync the monitored blocks
+             notifier.syncWithFirestore(currentProfile.monitoredBlocks);
+         } else {
+             // User logged out or profile is null, reset local state
+             notifier.syncWithFirestore([]);
+         }
+    });
+
+    return notifier;
 });

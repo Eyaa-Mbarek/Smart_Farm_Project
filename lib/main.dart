@@ -1,32 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-// import 'package:firebase_messaging/firebase_messaging.dart'; // REMOVED
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
-import 'presentation/providers/monitored_blocks_provider.dart';
-import 'presentation/screens/home_screen.dart';
-import 'presentation/services/notification_service.dart'; // Import the new service
+// import 'presentation/providers/monitored_blocks_provider.dart'; // Monitored blocks now loaded via user profile
+import 'presentation/screens/wrapper.dart'; // Import Wrapper
+import 'presentation/services/notification_service.dart';
 
-// Global navigator key (optional, if needed for navigation from tap)
-// final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+// --- REMOVED GLOBAL NAV KEY (handle navigation differently if needed) ---
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Initialize Local Notifications Service
-  await NotificationService().init(); // Use the service
+  await NotificationService().init();
 
-  // --- REMOVED ALL FCM Specific Setup (requestPermission, handlers, token logic) ---
+  // --- REMOVED FCM Specific Setup ---
 
   runApp(
-     ProviderScope(
-        overrides: [
-          monitoredBlockIdsProvider.overrideWith(
-             (ref) => MonitoredBlockIdsNotifier()..loadMonitoredBlocks(),
-          ),
-        ],
-        child: const MyApp()
+     const ProviderScope( // Keep ProviderScope at the root
+        // REMOVED override for monitoredBlockIdsProvider, let it load based on user state
+        child: MyApp()
     )
   );
 }
@@ -37,15 +31,19 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      // navigatorKey: navigatorKey, // Optional
-      title: 'Farm Climate Monitor',
+      // REMOVED navigatorKey
+      title: 'Climate Monitor',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const HomeScreen(),
+      // Start with the Wrapper to handle auth state
+      home: const Wrapper(),
     );
   }
 }
+
+
+ 
+
