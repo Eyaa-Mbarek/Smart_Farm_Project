@@ -1,4 +1,4 @@
-import 'package:smart_farm_test/domain/entities/notification_item.dart';
+import 'package:smart_farm_test/domain/entities/notification_item.dart'; // Adjust import path
 
 abstract class INotificationRepository {
   // Watch notifications for a user
@@ -8,6 +8,7 @@ abstract class INotificationRepository {
       required String title,
       required String body,
       String? blocId,
+      String? deviceId, // Add deviceId
   });
    // Mark a notification as read
   Future<void> markNotificationAsRead(String uid, String notificationId);

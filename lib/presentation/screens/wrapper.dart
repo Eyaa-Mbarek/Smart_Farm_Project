@@ -1,41 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_farm_test/presentation/providers/auth_providers.dart';
-import 'package:smart_farm_test/presentation/screens/auth/login_screen.dart'; // Create this
-import 'package:smart_farm_test/presentation/screens/main_screen.dart'; // Create this (holds bottom nav)
+import 'package:smart_farm_test/presentation/providers/auth_providers.dart'; // Adjust import path
+import 'package:smart_farm_test/presentation/screens/auth/login_screen.dart'; // Adjust import path
+import 'package:smart_farm_test/presentation/screens/main_screen.dart'; // Adjust import path
 
 class Wrapper extends ConsumerWidget {
   const Wrapper({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Listen to the authentication state
     final authState = ref.watch(authStateProvider);
 
-    print("Wrapper Build: Auth State Received -> $authState"); // <-- ADD THIS
-
+    // Use .when to handle loading, error, and data states
     return authState.when(
       data: (user) {
-         print("Wrapper Data: User -> ${user?.uid ?? 'null'}"); // <-- ADD THIS
+        // If user data exists (logged in)
         if (user != null) {
-          // User is logged in, show the main app screen
-          print("Wrapper: Navigating to MainScreen"); // <-- ADD THIS
+          print("Wrapper: User logged in (${user.uid})");
+          // Show the main application screen with bottom navigation
           return const MainScreen();
-        } else {
-          // User is logged out, show the login screen
-           print("Wrapper: Navigating to LoginScreen"); // <-- ADD THIS
-          return const LoginScreen(); // Or an AuthToggle screen
+        }
+        // If user data is null (logged out)
+        else {
+          print("Wrapper: User logged out");
+          // Show the login screen
+          return const LoginScreen();
         }
       },
       loading: () {
-         print("Wrapper: Loading Auth State..."); // <-- ADD THIS
-        // Show a loading indicator while checking auth state
+        // Show a loading indicator while the auth state is being determined
+        print("Wrapper: Checking auth state...");
         return const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         );
       },
       error: (error, stackTrace) {
-         print("Wrapper: Auth Error State -> $error"); // <-- ADD THIS
-         // Handle error state (e.g., show an error message)
+         // Handle potential errors during auth state checking
+          print("Wrapper: Auth Error - $error\n$stackTrace");
          return Scaffold(
            body: Center(child: Text('Authentication error: $error')),
          );

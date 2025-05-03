@@ -1,4 +1,4 @@
-import 'package:smart_farm_test/domain/entities/sensor_type.dart';
+import 'package:smart_farm_test/domain/entities/sensor_type.dart'; // Adjust import path
 
 class SensorBlock {
   final String id; // e.g., "bloc1"
@@ -21,11 +21,11 @@ class SensorBlock {
     this.lastUpdated,
   });
 
-   // Helper factory method for parsing from Firebase JSON
+   // Helper factory method for parsing from Firebase RTDB JSON
   factory SensorBlock.fromJson(String id, Map<String, dynamic> json) {
     final typeInt = json['type'] as int?;
     final type = intToSensorType(typeInt);
-    final timestamp = json['lastUpdated'] as int?; // Firebase timestamp is int (ms)
+    final timestamp = json['lastUpdated'] as int?; // RTDB timestamp is int (ms)
 
     return SensorBlock(
       id: id,
@@ -41,7 +41,7 @@ class SensorBlock {
     );
   }
 
-  // Helper method to convert back to JSON for updates (only config fields)
+  // Helper method to convert back to JSON for RTDB updates (only config fields)
   Map<String, dynamic> toConfigJson() {
     return {
       'name': name,

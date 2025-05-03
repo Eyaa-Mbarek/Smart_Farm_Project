@@ -4,7 +4,7 @@ String sensorTypeToUnit(SensorType type) {
   switch (type) {
     case SensorType.temperature: return '°C';
     case SensorType.humidity: return '%';
-    case SensorType.pressure: return 'hPa';
+    case SensorType.pressure: return 'hPa'; // Adjusted from Pa
     case SensorType.luminosity: return 'lux';
     default: return '';
   }

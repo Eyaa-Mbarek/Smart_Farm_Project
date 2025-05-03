@@ -1,91 +1,168 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smart_farm_test/domain/entities/notification_item.dart'; // Import entity
-import 'package:smart_farm_test/domain/entities/user_profile.dart'; // Import entity
+import 'package:smart_farm_test/domain/entities/notification_item.dart'; // Adjust import path
+import 'package:smart_farm_test/domain/entities/user_profile.dart'; // Adjust import path
+// DeviceConfig entity is not directly used here, but methods operate on its collection
 
 class FirestoreDataSource {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // --- User Profile Methods ---
 
+  DocumentReference<Map<String, dynamic>> _userRef(String uid) {
+     return _firestore.collection('users').doc(uid);
+  }
+
   Future<DocumentSnapshot<Map<String, dynamic>>> getUserProfile(String uid) {
-     return _firestore.collection('users').doc(uid).get();
+     return _userRef(uid).get();
+  }
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> watchUserProfileSnapshot(String uid) {
+     return _userRef(uid).snapshots();
   }
 
    // Creates or overwrites user profile document
   Future<void> setUserProfile(String uid, Map<String, dynamic> data) async {
-     // Add createdAt timestamp only when creating
-     final docRef = _firestore.collection('users').doc(uid);
-     final doc = await docRef.get();
-     if (!doc.exists) {
-        data['createdAt'] = FieldValue.serverTimestamp();
-     }
-     await docRef.set(data, SetOptions(merge: true)); // Use merge: true to avoid overwriting fields not included in 'data'
+     // This ensures initialData with serverTimestamp is handled correctly
+     await _userRef(uid).set(data, SetOptions(merge: true));
   }
 
   Future<void> updateUserProfile(String uid, Map<String, dynamic> data) {
-    // Ensure createdAt is not overwritten if present in data
+    // Ensure internal arrays/maps are not accidentally overwritten by general update
     data.remove('createdAt');
-     return _firestore.collection('users').doc(uid).update(data);
+    data.remove('ownedDevices');
+    data.remove('accessibleDevices');
+    data.remove('fcmTokens');
+    data.remove('monitoredDevices'); // Specific method updates this
+    if (data.isEmpty) return Future.value(); // Avoid empty update
+     return _userRef(uid).update(data);
   }
 
-  // --- Monitored Blocks (within User Profile) ---
+   // --- User Device List Methods ---
+   Future<void> addDeviceToUserList(String uid, String field, String deviceId) {
+      // Adds deviceId to an array field (monitoredDevices or ownedDevices)
+      return _userRef(uid).update({
+          field: FieldValue.arrayUnion([deviceId])
+      });
+   }
+    Future<void> removeDeviceFromUserList(String uid, String field, String deviceId) {
+      // Removes deviceId from an array field
+      return _userRef(uid).update({
+          field: FieldValue.arrayRemove([deviceId])
+      });
+   }
+   Future<void> addDeviceToAccessibleMap(String uid, String deviceId, String ownerUid) {
+      // Adds an entry to the accessibleDevices map
+      return _userRef(uid).update({
+          'accessibleDevices.$deviceId': ownerUid // Use dot notation
+      });
+   }
+   Future<void> removeDeviceFromAccessibleMap(String uid, String deviceId) {
+      // Removes an entry from the accessibleDevices map
+       return _userRef(uid).update({
+          'accessibleDevices.$deviceId': FieldValue.delete()
+      });
+   }
 
-  Future<void> updateMonitoredBlocks(String uid, List<String> blockIds) {
-     return _firestore.collection('users').doc(uid).update({'monitoredBlocks': blockIds});
+    // --- User FCM Token Methods ---
+   Future<void> addFcmToken(String uid, String token) {
+       return _userRef(uid).update({
+           'fcmTokens': FieldValue.arrayUnion([token])
+       });
+   }
+    Future<void> removeFcmToken(String uid, String token) {
+       return _userRef(uid).update({
+           'fcmTokens': FieldValue.arrayRemove([token])
+       });
+   }
+
+
+  // --- Device Config Methods ---
+  DocumentReference<Map<String, dynamic>> _deviceConfigRef(String deviceId) {
+     return _firestore.collection('devices_config').doc(deviceId);
   }
 
-  Stream<UserProfile> watchUserProfile(String uid) {
-     return _firestore.collection('users').doc(uid).snapshots().map((snapshot) {
-        if (!snapshot.exists || snapshot.data() == null) {
-           throw Exception("User profile not found for UID: $uid");
-        }
-        return UserProfile.fromFirestore(snapshot);
-     });
+  Future<DocumentSnapshot<Map<String, dynamic>>> getDeviceConfig(String deviceId) {
+     return _deviceConfigRef(deviceId).get();
+  }
+
+   Future<bool> deviceConfigExists(String deviceId) async {
+     final doc = await getDeviceConfig(deviceId);
+     return doc.exists;
+  }
+
+  Future<void> createDeviceConfig(String deviceId, Map<String, dynamic> data) {
+     // Assumes data includes ownerUid, deviceName, createdAt, authorizedUsers
+     return _deviceConfigRef(deviceId).set(data);
+  }
+
+  Future<void> updateDeviceConfig(String deviceId, Map<String, dynamic> data) {
+     data.remove('ownerUid'); // Protect ownerUid
+     data.remove('createdAt');
+     if (data.isEmpty) return Future.value();
+     return _deviceConfigRef(deviceId).update(data);
+  }
+
+  Future<void> deleteDeviceConfig(String deviceId) {
+     return _deviceConfigRef(deviceId).delete();
   }
 
 
   // --- Notification History Methods ---
+  CollectionReference<Map<String, dynamic>> _notificationsRef(String uid) {
+      return _userRef(uid).collection('notifications');
+  }
 
-   Future<void> addNotification(String uid, Map<String, dynamic> notificationData) async {
-         // Create a new map locally to ensure we control all fields being added
-         final Map<String, dynamic> dataToSave = Map.from(notificationData); // Copy incoming data
+  Future<void> addNotification(String uid, Map<String, dynamic> notificationData) async {
+    // Create a new map locally to ensure we control all fields being added
+    final Map<String, dynamic> dataToSave = Map.from(notificationData);
 
-         // Add the special fields DIRECTLY to the map being saved
-         dataToSave['timestamp'] = FieldValue.serverTimestamp();
-         dataToSave['read'] = false; // Default to unread
+    // Add the special fields DIRECTLY to the map being saved
+    dataToSave['timestamp'] = FieldValue.serverTimestamp();
+    dataToSave['read'] = false; // Default to unread
 
-         print("FirestoreDataSource: Adding notification data: $dataToSave for UID: $uid");
-         try {
-             // Add the locally constructed map
-             await _firestore.collection('users').doc(uid).collection('notifications').add(dataToSave);
-             print("FirestoreDataSource: Notification added successfully.");
-         } catch (e) {
-            print("FirestoreDataSource: Error adding notification document: $e");
-            rethrow;
-         }
-      }
+    print("FirestoreDataSource: Adding notification data: $dataToSave for UID: $uid");
+    try {
+        // Add the locally constructed map
+        await _notificationsRef(uid).add(dataToSave);
+        print("FirestoreDataSource: Notification added successfully.");
+    } catch (e) {
+       print("FirestoreDataSource: Error adding notification document: $e");
+       rethrow;
+    }
+ }
 
-  // Stream of notifications ordered by timestamp descending
   Stream<List<NotificationItem>> watchNotifications(String uid) {
-    final query = _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('notifications')
+    print("FirestoreDataSource: watchNotifications called for UID: $uid");
+    final query = _notificationsRef(uid)
         .orderBy('timestamp', descending: true)
-        .limit(50); // Limit the number of notifications fetched
+        .limit(50); // Limit for performance
 
     return query.snapshots().map((snapshot) {
+      print("FirestoreDataSource: Received ${snapshot.docs.length} notification snapshots for UID: $uid");
       return snapshot.docs
-          .map((doc) => NotificationItem.fromFirestore(doc))
+          .map((doc) {
+              try {
+                 return NotificationItem.fromFirestore(doc);
+              } catch (e) {
+                  print("FirestoreDataSource: Error parsing notification ${doc.id}: $e");
+                  return null; // Handle potential parsing errors
+              }
+           })
+          .whereType<NotificationItem>() // Filter out nulls
           .toList();
+    }).handleError((error) {
+       print("FirestoreDataSource: Error in notification stream for UID $uid: $error");
+       // Propagate error or return empty list
+       // throw error;
+        return <NotificationItem>[]; // Return empty list on stream error
     });
   }
 
   Future<void> markNotificationAsRead(String uid, String notificationId) {
-     return _firestore.collection('users').doc(uid).collection('notifications').doc(notificationId).update({'read': true});
+     return _notificationsRef(uid).doc(notificationId).update({'read': true});
   }
 
    Future<void> deleteNotification(String uid, String notificationId) {
-     return _firestore.collection('users').doc(uid).collection('notifications').doc(notificationId).delete();
+     return _notificationsRef(uid).doc(notificationId).delete();
   }
 }

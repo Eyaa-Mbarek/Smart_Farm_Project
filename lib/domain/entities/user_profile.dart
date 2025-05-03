@@ -3,42 +3,67 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserProfile {
   final String uid;
   final String email;
-  final String? username; // Optional username
+  final String? username;
   final Timestamp? createdAt;
-  final List<String> monitoredBlocks; // List of monitored block IDs
+  final List<String> monitoredDevices; // List of device IDs user actively watches
+  final List<String> ownedDevices;     // List of device IDs user owns
+  final Map<String, String> accessibleDevices; // Map<deviceId, ownerUid> for shared devices
+  final List<String> fcmTokens; // List of FCM tokens for this user
 
   UserProfile({
     required this.uid,
     required this.email,
     this.username,
     this.createdAt,
-    required this.monitoredBlocks,
+    required this.monitoredDevices,
+    required this.ownedDevices,
+    required this.accessibleDevices,
+    required this.fcmTokens,
   });
 
-  // Factory constructor to create a UserProfile from a Firestore snapshot
   factory UserProfile.fromFirestore(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data();
     if (data == null) throw Exception("User profile data is null!");
 
+    // Helper to safely convert map from Firestore
+    Map<String, String> safeMapCast(Map<dynamic, dynamic>? inputMap) {
+        if (inputMap == null) return {};
+        return Map<String, String>.from(inputMap.map(
+             (key, value) => MapEntry(key.toString(), value.toString()),
+        ));
+    }
+
     return UserProfile(
       uid: snapshot.id,
-      email: data['email'] as String? ?? '', // Handle potential null email?
+      email: data['email'] as String? ?? '',
       username: data['username'] as String?,
       createdAt: data['createdAt'] as Timestamp?,
-       // Ensure monitoredBlocks is always a list, even if null/missing in Firestore
-      monitoredBlocks: List<String>.from(data['monitoredBlocks'] as List<dynamic>? ?? []),
+      monitoredDevices: List<String>.from(data['monitoredDevices'] as List<dynamic>? ?? []),
+      ownedDevices: List<String>.from(data['ownedDevices'] as List<dynamic>? ?? []),
+      accessibleDevices: safeMapCast(data['accessibleDevices'] as Map<dynamic, dynamic>?),
+      fcmTokens: List<String>.from(data['fcmTokens'] as List<dynamic>? ?? []), // Load FCM tokens
     );
   }
 
-  // Method to convert UserProfile to a map for Firestore updates
-  Map<String, dynamic> toFirestore() {
+  // Map for general profile updates (e.g., username, monitored devices)
+  Map<String, dynamic> toUpdateFirestore() {
     return {
-      // Don't write UID to the document itself
-      'email': email,
       if (username != null) 'username': username,
-      // createdAt is usually set server-side on create, don't overwrite
-      'monitoredBlocks': monitoredBlocks,
-       // You might add 'lastUpdated' timestamp here if needed
+      'monitoredDevices': monitoredDevices,
+      // Note: email, ownedDevices, accessibleDevices, fcmTokens are usually updated via specific actions
     };
   }
+
+   // Helper to create initial data for a new user profile
+   static Map<String, dynamic> initialData(String email, {String? username}) {
+      return {
+         'email': email,
+         'username': username, // Can be null initially
+         'createdAt': FieldValue.serverTimestamp(),
+         'monitoredDevices': [], // Start with no monitored devices
+         'ownedDevices': [],     // Start with no owned devices
+         'accessibleDevices': {}, // Start with no accessible devices
+         'fcmTokens': [], // Initialize fcmTokens array
+      };
+   }
 }

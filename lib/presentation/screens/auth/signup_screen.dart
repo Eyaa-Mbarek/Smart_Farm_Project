@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:smart_farm_test/presentation/providers/auth_providers.dart';
-import 'package:smart_farm_test/presentation/screens/auth/login_screen.dart'; // Navigate back to login
+import 'package:smart_farm_test/presentation/providers/auth_providers.dart'; // Adjust import path
+// No explicit navigation back needed, Wrapper handles state change
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({Key? key}) : super(key: key);
@@ -21,34 +21,62 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   String? _errorMessage;
 
   Future<void> _signUp() async {
-    if (_formKey.currentState!.validate()) {
-      if (_passwordController.text != _confirmPasswordController.text) {
-        setState(() { _errorMessage = 'Passwords do not match.'; });
-        return;
-      }
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-      try {
-        final authRepository = ref.read(authRepositoryProvider);
-        await authRepository.signUpWithEmailPassword(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-           username: _usernameController.text.trim().isEmpty ? null : _usernameController.text.trim(), // Pass username
-        );
-         // Navigation handled by Wrapper
-      } on FirebaseAuthException catch (e) {
-         setState(() { _errorMessage = e.message ?? 'Signup failed.'; });
-          print("Signup Error: ${e.code} - ${e.message}");
-      } catch (e) {
-         setState(() { _errorMessage = 'An unexpected error occurred.'; });
-          print("Signup Error (General): $e");
-      } finally {
-          if (mounted) {
-             setState(() { _isLoading = false; });
-          }
-      }
+     // Validate form inputs
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return; // Don't proceed if validation fails
+    }
+
+    // No need to re-check password match here, validator does it
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authRepository = ref.read(authRepositoryProvider);
+      // Attempt sign up, passing optional username
+      await authRepository.signUpWithEmailPassword(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+         username: _usernameController.text.trim().isEmpty ? null : _usernameController.text.trim(),
+      );
+       // IMPORTANT: No navigation needed here.
+       // The Wrapper widget listens to authStateProvider and will automatically
+       // navigate to MainScreen when the user state changes to logged in after signup.
+       if (mounted) {
+         print("Signup successful, Wrapper should navigate.");
+         // Optionally show a success message before Wrapper navigates
+         // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Account created successfully!')));
+       }
+
+    } on FirebaseAuthException catch (e) {
+       if (mounted) {
+          setState(() {
+             // Provide user-friendly messages
+             if (e.code == 'weak-password') {
+                _errorMessage = 'The password provided is too weak.';
+             } else if (e.code == 'email-already-in-use') {
+                 _errorMessage = 'An account already exists for that email.';
+             } else {
+                 _errorMessage = e.message ?? 'Signup failed. Please try again.';
+             }
+          });
+       }
+        print("Signup Error (FirebaseAuth): ${e.code} - ${e.message}");
+
+    } catch (e) {
+       if (mounted) {
+          setState(() {
+            _errorMessage = 'An unexpected error occurred during signup.';
+          });
+       }
+        print("Signup Error (General): $e");
+
+    } finally {
+        if (mounted) {
+           setState(() { _isLoading = false; });
+        }
     }
   }
 
@@ -64,7 +92,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign Up')),
+      appBar: AppBar(title: const Text('Sign Up')), // Keep back button by default
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -72,54 +100,80 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Create Account', style: Theme.of(context).textTheme.headlineMedium),
+                Text('Create Account', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Theme.of(context).colorScheme.primary), textAlign: TextAlign.center),
                 const SizedBox(height: 30),
                  TextFormField( // Optional Username
                   controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username (Optional)', border: OutlineInputBorder()),
-                  validator: (value) => null, // No strict validation for optional
+                  decoration: const InputDecoration(labelText: 'Username (Optional)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person_outline)),
+                   textInputAction: TextInputAction.next,
+                  // No strict validation needed for optional field
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) => (value == null || !value.contains('@')) ? 'Enter a valid email' : null,
+                   validator: (value) {
+                     if (value == null || value.trim().isEmpty) return 'Please enter your email';
+                     if (!value.contains('@') || !value.contains('.')) return 'Enter a valid email address';
+                     return null;
+                  },
+                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
                   obscureText: true,
-                  validator: (value) => (value == null || value.length < 6) ? 'Min. 6 characters' : null,
+                  validator: (value) => (value == null || value.length < 6) ? 'Password must be at least 6 characters' : null,
+                   textInputAction: TextInputAction.next,
                 ),
                  const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmPasswordController,
-                  decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_reset_outlined)),
                   obscureText: true,
-                  validator: (value) => (value == null || value != _passwordController.text) ? 'Passwords must match' : null,
+                  validator: (value) {
+                     if (value == null || value.isEmpty) return 'Please confirm your password';
+                     if (value != _passwordController.text) return 'Passwords do not match';
+                     return null;
+                  },
+                   textInputAction: TextInputAction.done,
+                   onFieldSubmitted: (_) => _isLoading ? null : _signUp(),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
+                 // Display error message
                  if (_errorMessage != null)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        textAlign: TextAlign.center,
+                    ),
                   ),
+                 // Show loading indicator or signup button
                 _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton.icon(
+                         icon: const Icon(Icons.person_add_alt_1),
+                         label: const Text('Sign Up'),
                         onPressed: _signUp,
-                        style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                        child: const Text('Sign Up'),
+                         style: ElevatedButton.styleFrom(
+                           padding: const EdgeInsets.symmetric(vertical: 12),
+                           textStyle: const TextStyle(fontSize: 16)
+                        ),
                       ),
-                 const SizedBox(height: 16),
+                 const SizedBox(height: 20),
+                 // Link back to Login Screen
                 TextButton(
-                  onPressed: () {
-                     Navigator.of(context).pushReplacement( // Replace Signup with Login
-                      MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    );
+                  onPressed: _isLoading ? null : () {
+                    // Simply pop the current screen to go back to Login
+                    if (Navigator.canPop(context)) {
+                       Navigator.pop(context);
+                    }
                   },
                   child: const Text('Already have an account? Login'),
                 ),
