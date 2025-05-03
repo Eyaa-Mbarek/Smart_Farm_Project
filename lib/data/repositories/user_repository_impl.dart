@@ -6,7 +6,7 @@ import 'package:smart_farm_test/domain/repositories/user_repository.dart'; // Ad
 class UserRepositoryImpl implements IUserRepository {
   final FirestoreDataSource _dataSource;
   UserRepositoryImpl(this._dataSource);
-
+  
   @override
   Stream<UserProfile> watchUserProfile(String uid) {
      // Map the snapshot stream from datasource to UserProfile stream
@@ -67,4 +67,24 @@ class UserRepositoryImpl implements IUserRepository {
    Future<void> removeFcmToken(String uid, String token) {
        return _dataSource.removeFcmToken(uid, token);
    }
+
+
+    // --- User Lookup ---
+  @override
+  Future<UserProfile?> findUserByEmail(String email) async {
+     try {
+        final querySnapshot = await _dataSource.findUserByEmail(email);
+        if (querySnapshot.docs.isNotEmpty) {
+           // Found a user with that email
+           final userDoc = querySnapshot.docs.first;
+           return UserProfile.fromFirestore(userDoc);
+        } else {
+           // No user found with that email
+           return null;
+        }
+     } catch (e) {
+        print("Error finding user by email ($email): $e");
+        return null; // Return null on error
+     }
+  }
 }

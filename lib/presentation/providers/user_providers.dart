@@ -1,10 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:smart_farm_test/data/datasources/firestore_datasource.dart'; // Assuming exists via auth_providers
+import 'package:smart_farm_test/data/datasources/firestore_datasource.dart'; // Adjust import path
 import 'package:smart_farm_test/data/repositories/user_repository_impl.dart'; // Adjust import path
 import 'package:smart_farm_test/domain/entities/user_profile.dart'; // Adjust import path
 import 'package:smart_farm_test/domain/repositories/user_repository.dart'; // Adjust import path
 import 'package:smart_farm_test/presentation/providers/auth_providers.dart'; // Need auth state
-
 // --- FirestoreDataSource Provider (defined in auth_providers) ---
 // Re-export or ensure it's accessible if needed directly, but usually accessed via repo.
 // final firestoreDataSourceProvider = Provider<FirestoreDataSource>(...);
@@ -101,3 +100,11 @@ final removeUserFcmTokenProvider = Provider((ref) {
       }
    };
 });
+
+// --- Provider for User Lookup Action ---
+final findUserByEmailProvider = Provider((ref) {
+   final repo = ref.watch(userRepositoryProvider);
+   // Takes email, returns Future<UserProfile?>
+   return (String email) => repo.findUserByEmail(email);
+});
+

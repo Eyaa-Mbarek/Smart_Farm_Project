@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import 'package:smart_farm_test/presentation/providers/auth_providers.dart'; // Adjust import path
-import 'package:smart_farm_test/presentation/providers/user_providers.dart'; // Adjust import path
-import 'package:smart_farm_test/presentation/providers/notification_providers.dart'; // Adjust import path
-import 'package:smart_farm_test/domain/entities/user_profile.dart'; // Adjust import path
-import 'package:smart_farm_test/domain/entities/notification_item.dart'; // Adjust import path
-import 'package:smart_farm_test/domain/repositories/auth_repository.dart'; // Adjust import path
-
+    import 'package:flutter_riverpod/flutter_riverpod.dart';
+    import 'package:intl/intl.dart';
+    import 'package:smart_farm_test/presentation/providers/auth_providers.dart';
+    import 'package:smart_farm_test/presentation/providers/user_providers.dart';
+    import 'package:smart_farm_test/presentation/providers/notification_providers.dart';
+    import 'package:smart_farm_test/domain/entities/user_profile.dart';
+    import 'package:smart_farm_test/domain/entities/notification_item.dart';
+    import 'package:smart_farm_test/domain/repositories/auth_repository.dart';
+    import 'package:smart_farm_test/presentation/providers/device_providers.dart'; // Import device providers
+    import 'manage_device_access_screen.dart'; // Import the new screen
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
 
@@ -102,11 +103,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
 
   @override
-  Widget build(BuildContext context) {
-    final userProfileAsync = ref.watch(userProfileProvider);
-    final notificationsAsync = ref.watch(notificationHistoryProvider);
-    // Read auth repository for logout action
-    final authRepository = ref.read(authRepositoryProvider);
+      Widget build(BuildContext context) {
+        final userProfileAsync = ref.watch(userProfileProvider);
+        final notificationsAsync = ref.watch(notificationHistoryProvider);
+        final authRepository = ref.read(authRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -224,6 +224,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                  ),
 
                  const Divider(height: 30, thickness: 1),
+
+                   // --- Owned Devices Section (NEW) ---
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Text('My Owned Devices', style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      if (userProfile.ownedDevices.isEmpty)
+                          const Card(child: ListTile(title: Text("You haven't registered any devices yet.")))
+                      else
+                          ...userProfile.ownedDevices.map((deviceId) {
+                              // Watch device config to get its name
+                              final deviceConfigAsync = ref.watch(deviceConfigProvider(deviceId));
+                              return Card(
+                                 margin: const EdgeInsets.symmetric(vertical: 4),
+                                 child: ListTile(
+                                    leading: const Icon(Icons.developer_board),
+                                    title: Text(deviceConfigAsync.when(
+                                        data: (c) => c?.deviceName ?? deviceId,
+                                        loading: () => deviceId,
+                                        error: (e,s) => deviceId
+                                    )),
+                                    subtitle: Text("ID: $deviceId"),
+                                    trailing: ElevatedButton( // Button to manage access
+                                        child: const Text("Manage Access"),
+                                        onPressed: () {
+                                            Navigator.push(context, MaterialPageRoute(
+                                               builder: (context) => ManageDeviceAccessScreen(deviceId: deviceId),
+                                            ));
+                                        },
+                                    ),
+                                    // Optional: Add button to remove from monitored list? Or delete device?
+                                 ),
+                              );
+                           }).toList(),
+
+                       const Divider(height: 30, thickness: 1),
 
                  // --- Notification History Section ---
                   Padding(

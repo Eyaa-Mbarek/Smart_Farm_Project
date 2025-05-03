@@ -75,6 +75,15 @@ class FirestoreDataSource {
        });
    }
 
+ // --- User Lookup Method (NEW) ---
+  Future<QuerySnapshot<Map<String, dynamic>>> findUserByEmail(String email) {
+     // Query users collection where email matches. Limit to 1 for efficiency.
+     return _firestore.collection('users')
+         .where('email', isEqualTo: email.trim().toLowerCase()) // Search lowercase email
+         .limit(1)
+         .get();
+  }
+
 
   // --- Device Config Methods ---
   DocumentReference<Map<String, dynamic>> _deviceConfigRef(String deviceId) {
@@ -106,6 +115,23 @@ class FirestoreDataSource {
      return _deviceConfigRef(deviceId).delete();
   }
 
+// Stream to watch a single device config document (NEW)
+   Stream<DocumentSnapshot<Map<String, dynamic>>> watchDeviceConfig(String deviceId) {
+      return _deviceConfigRef(deviceId).snapshots();
+   }
+
+  // --- Authorization Management Methods (NEW) ---
+   Future<void> addAuthorizedUser(String deviceId, String userUidToAdd) {
+      return _deviceConfigRef(deviceId).update({
+         'authorizedUsers': FieldValue.arrayUnion([userUidToAdd])
+      });
+   }
+
+   Future<void> removeAuthorizedUser(String deviceId, String userUidToRemove) {
+      return _deviceConfigRef(deviceId).update({
+         'authorizedUsers': FieldValue.arrayRemove([userUidToRemove])
+      });
+   }
 
   // --- Notification History Methods ---
   CollectionReference<Map<String, dynamic>> _notificationsRef(String uid) {

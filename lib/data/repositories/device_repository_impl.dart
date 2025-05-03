@@ -6,10 +6,9 @@ import 'package:smart_farm_test/domain/repositories/device_repository.dart'; // 
 
 class DeviceRepositoryImpl implements IDeviceRepository {
   final FirestoreDataSource _firestoreDataSource;
-  final FirebaseDataSource _rtdbDataSource; // Inject RTDB datasource
+  final FirebaseDataSource _rtdbDataSource;
 
   DeviceRepositoryImpl(this._firestoreDataSource, this._rtdbDataSource);
-
   // --- Firestore Device Config ---
   @override
   Future<DeviceConfig?> getDeviceConfig(String deviceId) async {
@@ -23,6 +22,19 @@ class DeviceRepositoryImpl implements IDeviceRepository {
         }
      }
      return null;
+  }
+
+  @override
+  Stream<DeviceConfig?> watchDeviceConfig(String deviceId) { // NEW watch method
+     return _firestoreDataSource.watchDeviceConfig(deviceId).map((snapshot) {
+        if (snapshot.exists && snapshot.data() != null) {
+           try { return DeviceConfig.fromFirestore(snapshot); } catch (e) { return null; }
+        }
+        return null;
+     }).handleError((e) {
+         print("Error in watchDeviceConfig stream for $deviceId: $e");
+         return null; // Emit null on error
+     });
   }
 
   @override
@@ -54,6 +66,17 @@ class DeviceRepositoryImpl implements IDeviceRepository {
        print("Warning: Deleting device config $deviceId without cleaning up user references.");
        return _firestoreDataSource.deleteDeviceConfig(deviceId);
    }
+
+// --- Authorization Management ---
+  @override
+  Future<void> addAuthorizedUser(String deviceId, String userUidToAdd) {
+     return _firestoreDataSource.addAuthorizedUser(deviceId, userUidToAdd);
+  }
+  @override
+  Future<void> removeAuthorizedUser(String deviceId, String userUidToRemove) {
+     // Optional: Add check to prevent removing the owner? Rules should handle this.
+     return _firestoreDataSource.removeAuthorizedUser(deviceId, userUidToRemove);
+  }
 
   // --- Realtime Database Sensor Data ---
   @override
