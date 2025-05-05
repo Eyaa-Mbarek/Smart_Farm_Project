@@ -191,4 +191,58 @@ class FirestoreDataSource {
    Future<void> deleteNotification(String uid, String notificationId) {
      return _notificationsRef(uid).doc(notificationId).delete();
   }
+
+  CollectionReference<Map<String, dynamic>> _readingsRef(String deviceId, String blockId) {
+     return _firestore
+         .collection('devices_history')
+         .doc(deviceId)
+         .collection('blocs')
+         .doc(blockId)
+         .collection('readings');
+  }
+
+  // Query for history readings
+Stream<QuerySnapshot<Map<String, dynamic>>> watchBlockReadingsQuery(
+   String deviceId,
+   String blockId,
+   { DateTime? startTime, DateTime? endTime, int? limit }
+) {
+    Query<Map<String, dynamic>> query = _readingsRef(deviceId, blockId)
+                                          .orderBy('timestamp', descending: true);
+    // ... (add filters for startTime, endTime, limit as before) ...
+
+    print("FirestoreDataSource: WATCHING history for $deviceId/$blockId (Limit: $limit)"); // Log subscription start
+
+    return query.snapshots().map((snapshot) { // Add map here to log *before* repo processes
+       print("FirestoreDataSource: Snapshot received for $deviceId/$blockId - Docs: ${snapshot.docs.length}"); // Log snapshot arrival
+       snapshot.docs.forEach((doc) { // Log individual docs received (optional, can be verbose)
+         // print("  - Doc ID: ${doc.id}, Data: ${doc.data()}");
+       });
+       return snapshot; // Pass the snapshot along
+    }).handleError((error, stackTrace) { // Add detailed error logging for the stream itself
+       print("FirestoreDataSource: ERROR in Firestore stream for $deviceId/$blockId: $error\n$stackTrace");
+       // Rethrow the error so the repository's handleError can catch it too
+       throw error;
+    });
+}
+
+  // Method to add a single reading (used by ESP32 or potentially app background task)
+  Future<void> addBlockReading(
+     String deviceId,
+     String blockId,
+     double value,
+     int type,
+     String unit
+  ) {
+     final data = {
+        'timestamp': FieldValue.serverTimestamp(), // Use server time
+        'value': value,
+        'type': type,
+        'unit': unit,
+     };
+      print("FirestoreDataSource: Adding history reading for $deviceId/$blockId");
+     return _readingsRef(deviceId, blockId).add(data);
+  }
+
+  
 }

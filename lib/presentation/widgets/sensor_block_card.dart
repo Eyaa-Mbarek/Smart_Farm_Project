@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:smart_farm_test/domain/entities/sensor_block.dart'; // Adjust import path
 import 'package:smart_farm_test/domain/entities/sensor_type.dart'; // Adjust import path
 import 'package:smart_farm_test/presentation/providers/device_providers.dart'; // Use device providers
+import 'package:smart_farm_test/presentation/screens/history/block_history_screen.dart';
 import 'package:smart_farm_test/presentation/screens/home/home_screen.dart'; // Import for selectedDeviceIdProvider
 
 class SensorBlockCard extends ConsumerWidget {
@@ -51,7 +52,23 @@ class SensorBlockCard extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
          // Show config dialog on tap
-        onTap: () => _showConfigDialog(context, ref, block),
+        onLongPress: () => _showConfigDialog(context, ref, block), // ADD onLongPress for config
+         onTap: () {
+    final selectedDeviceId = ref.read(selectedDeviceIdProvider);
+    if (selectedDeviceId != null) {
+       print("Navigating to history for $selectedDeviceId / ${block.id}");
+       Navigator.push(context, MaterialPageRoute(
+           builder: (context) => BlockHistoryScreen(
+               deviceId: selectedDeviceId,
+               blockId: block.id,
+           ),
+       ));
+    } else {
+       ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: No device selected to view history.'))
+       );
+    }
+},
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
